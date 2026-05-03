@@ -6,8 +6,8 @@ describe("validation", () => {
     expect(registerSchema.safeParse({ name: "Аня", username: "anya", password: "password123" }).success).toBe(true);
   });
 
-  it("rejects short password", () => {
-    expect(registerSchema.safeParse({ name: "Аня", username: "anya", password: "123" }).success).toBe(false);
+  it("accepts four-character password for MVP connector", () => {
+    expect(registerSchema.safeParse({ name: "Аня", username: "anya", password: "1234" }).success).toBe(true);
   });
 
   it("rejects empty message", () => {

@@ -73,7 +73,7 @@ export function AuthForm({ initialMode = "login" }: { initialMode?: Mode }) {
           value={password}
           onChange={(event) => setPassword(event.target.value)}
           autoComplete={mode === "register" ? "new-password" : "current-password"}
-          placeholder="Минимум 8 символов"
+          placeholder="Минимум 4 символа"
           type="password"
         />
       </label>

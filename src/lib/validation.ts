@@ -29,7 +29,7 @@ export const profileUpdateSchema = z.object({
 export const registerSchema = z.object({
   name: z.string().trim().min(2).max(60),
   username: z.string().trim().min(3).max(32).regex(/^[a-zA-Z0-9_а-яА-Я-]+$/),
-  password: z.string().min(8).max(128)
+  password: z.string().min(4).max(128)
 });
 
 export const loginSchema = z.object({

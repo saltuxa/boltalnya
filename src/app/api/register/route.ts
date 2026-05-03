@@ -1,5 +1,6 @@
 import { eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
+import { ZodError } from "zod";
 import { db } from "@/db/client";
 import { ensureDatabase } from "@/db/init";
 import { users } from "@/db/schema";
@@ -10,7 +11,14 @@ import { registerSchema } from "@/lib/validation";
 ensureDatabase();
 
 export async function POST(request: Request) {
-  const payload = registerSchema.parse(await request.json());
+  const body = await request.json().catch(() => null);
+  const parsed = registerSchema.safeParse(body);
+
+  if (!parsed.success) {
+    return NextResponse.json({ error: formatRegisterError(parsed.error) }, { status: 400 });
+  }
+
+  const payload = parsed.data;
   const username = payload.username.toLowerCase();
 
   const existing = await db.query.users.findFirst({
@@ -41,4 +49,15 @@ export async function POST(request: Request) {
     },
     { status: 201 }
   );
+}
+
+function formatRegisterError(error: ZodError) {
+  const first = error.issues[0];
+  if (!first) return "Проверьте данные регистрации";
+
+  const field = first.path[0];
+  if (field === "name") return "Имя должно быть от 2 до 60 символов";
+  if (field === "username") return "Логин должен быть от 3 до 32 символов: буквы, цифры, _ или -";
+  if (field === "password") return "Пароль должен быть минимум 4 символа";
+  return "Проверьте данные регистрации";
 }
