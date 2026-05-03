@@ -57,12 +57,12 @@ export async function listChats(userId: string, query = ""): Promise<ChatPreview
         type: chat.type,
         title: chat.title ?? "Без названия",
         avatar: chat.avatar,
-        updatedAt: chat.updatedAt.toISOString(),
+        updatedAt: serializeDate(chat.updatedAt),
         membersCount: membersCount[0]?.count ?? 0,
         lastMessage: lastMessage[0]
           ? {
               body: lastMessage[0].body,
-              createdAt: lastMessage[0].createdAt.toISOString(),
+              createdAt: serializeDate(lastMessage[0].createdAt),
               authorName: lastMessage[0].authorName
             }
           : null
@@ -257,9 +257,9 @@ async function hydrateMessage(
     chatId: row.chatId,
     body: row.deletedAt ? "Сообщение удалено" : row.body,
     replyToId: row.replyToId,
-    createdAt: row.createdAt.toISOString(),
-    editedAt: row.editedAt?.toISOString() ?? null,
-    deletedAt: row.deletedAt?.toISOString() ?? null,
+    createdAt: serializeDate(row.createdAt),
+    editedAt: row.editedAt ? serializeDate(row.editedAt) : null,
+    deletedAt: row.deletedAt ? serializeDate(row.deletedAt) : null,
     author: {
       id: row.authorId,
       name: row.authorName,
@@ -272,4 +272,20 @@ async function hydrateMessage(
       reactedByMe: Number(reaction.reactedByMe) > 0
     }))
   };
+}
+
+function serializeDate(value: Date | string | number) {
+  if (value instanceof Date && !Number.isNaN(value.getTime())) {
+    return value.toISOString();
+  }
+
+  if (typeof value === "number") {
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? new Date().toISOString() : date.toISOString();
+  }
+
+  const raw = String(value);
+  const normalized = raw.includes("T") ? raw : raw.replace(" ", "T");
+  const date = new Date(normalized.endsWith("Z") ? normalized : `${normalized}Z`);
+  return Number.isNaN(date.getTime()) ? new Date().toISOString() : date.toISOString();
 }

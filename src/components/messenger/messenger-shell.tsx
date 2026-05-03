@@ -111,26 +111,39 @@ export function MessengerShell({ currentUser, initialChats }: { currentUser: Use
     setActiveChatId(data.id);
   }
 
-  function submitMessage() {
+  async function submitMessage() {
     if (!activeChatId || !draft.trim()) return;
     const body = draft;
     setDraft("");
 
     if (editing) {
-      socket?.emit("message:update", { messageId: editing.id, body }, (result) => {
-        if (!result.ok) setDraft(body);
+      const response = await fetch(`/api/messages/${editing.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ body })
       });
+      const data = await response.json();
+      if (response.ok && data.message) {
+        setMessages((items) => items.map((item) => (item.id === data.message.id ? data.message : item)));
+      } else {
+        setDraft(body);
+      }
       setEditing(null);
       return;
     }
 
-    socket?.emit(
-      "message:create",
-      { chatId: activeChatId, body, replyToId: replyTo?.id },
-      (result) => {
-        if (!result.ok) setDraft(body);
-      }
-    );
+    const response = await fetch(`/api/chats/${activeChatId}/messages`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ body, replyToId: replyTo?.id })
+    });
+    const data = await response.json();
+    if (response.ok && data.message) {
+      setMessages((items) => (items.some((item) => item.id === data.message.id) ? items : [...items, data.message]));
+      refreshChats(chatQuery);
+    } else {
+      setDraft(body);
+    }
     setReplyTo(null);
   }
 
@@ -326,12 +339,12 @@ export function MessengerShell({ currentUser, initialChats }: { currentUser: Use
                   onKeyDown={(event) => {
                     if (event.key === "Enter" && !event.shiftKey) {
                       event.preventDefault();
-                      submitMessage();
+                      void submitMessage();
                     }
                   }}
                   placeholder="Написать сообщение"
                 />
-                <Button size="icon" variant="primary" onClick={submitMessage} title="Отправить">
+                <Button size="icon" variant="primary" onClick={() => void submitMessage()} title="Отправить">
                   <Send size={17} />
                 </Button>
               </div>
