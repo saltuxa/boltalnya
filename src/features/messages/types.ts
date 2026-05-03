@@ -3,6 +3,11 @@ export type MessageDto = {
   chatId: string;
   body: string;
   replyToId: string | null;
+  replyTo: {
+    id: string;
+    body: string;
+    authorName: string;
+  } | null;
   createdAt: string;
   editedAt: string | null;
   deletedAt: string | null;

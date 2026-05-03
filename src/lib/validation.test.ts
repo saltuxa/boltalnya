@@ -4,6 +4,9 @@ import {
   directChatSchema,
   loginSchema,
   messageCreateSchema,
+  messageUpdateSchema,
+  profileUpdateSchema,
+  reactionToggleSchema,
   registerSchema,
   userSearchSchema
 } from "@/lib/validation";
@@ -30,8 +33,20 @@ describe("validation", () => {
     expect(userSearchSchema.safeParse({ q: "an" }).success).toBe(true);
   });
 
-  it("rejects empty message", () => {
+  it("rejects empty message and accepts message update", () => {
     expect(messageCreateSchema.safeParse({ body: "   " }).success).toBe(false);
+    expect(messageUpdateSchema.safeParse({ body: "Исправлено" }).success).toBe(true);
+  });
+
+  it("accepts and limits reactions", () => {
+    expect(reactionToggleSchema.safeParse({ emoji: "👍" }).success).toBe(true);
+    expect(reactionToggleSchema.safeParse({ emoji: "" }).success).toBe(false);
+    expect(reactionToggleSchema.safeParse({ emoji: "x".repeat(17) }).success).toBe(false);
+  });
+
+  it("validates profile payload", () => {
+    expect(profileUpdateSchema.safeParse({ name: "Аня", username: "anya_1", status: "На связи", theme: "dark" }).success).toBe(true);
+    expect(profileUpdateSchema.safeParse({ name: "Аня", username: "!!", status: "", theme: "dark" }).success).toBe(false);
   });
 
   it("accepts login payload", () => {

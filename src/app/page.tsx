@@ -3,7 +3,7 @@ import { MessageSquare, Shield, Smartphone, Zap } from "lucide-react";
 import { getCurrentUser } from "@/lib/session";
 
 const benefits = [
-  { icon: Zap, title: "Быстро", text: "Сообщения, статусы и печатает обновляются без перезагрузки." },
+  { icon: Zap, title: "Быстро", text: "Сообщения, статусы и индикатор печати обновляются без перезагрузки." },
   { icon: Shield, title: "Спокойно", text: "Понятные права, личные чаты и группы без лишнего шума." },
   { icon: Smartphone, title: "Везде", text: "Адаптивный PWA-интерфейс для десктопа и телефона." }
 ];
@@ -31,9 +31,7 @@ export default async function LandingPage() {
       <section className="mx-auto grid max-w-7xl gap-10 px-5 pb-16 pt-10 lg:grid-cols-[0.9fr_1.1fr] lg:items-center lg:pt-20">
         <div className="max-w-2xl">
           <p className="mb-4 text-sm font-medium text-blue-300">Просто болтаем.</p>
-          <h1 className="text-5xl font-semibold tracking-normal text-white sm:text-6xl">
-            Болтальня
-          </h1>
+          <h1 className="text-5xl font-semibold tracking-normal text-white sm:text-6xl">Болтальня</h1>
           <p className="mt-5 max-w-xl text-lg leading-8 text-neutral-400">
             Строгий и быстрый мессенджер для дружеских разговоров, групп и спокойной повседневной переписки.
           </p>

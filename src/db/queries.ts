@@ -394,6 +394,7 @@ async function hydrateMessage(
     chatId: row.chatId,
     body: row.deletedAt ? "Сообщение удалено" : row.body,
     replyToId: row.replyToId,
+    replyTo: row.replyToId ? await getReplyPreview(row.replyToId) : null,
     createdAt: serializeDate(row.createdAt),
     editedAt: row.editedAt ? serializeDate(row.editedAt) : null,
     deletedAt: row.deletedAt ? serializeDate(row.deletedAt) : null,
@@ -408,6 +409,27 @@ async function hydrateMessage(
       count: Number(reaction.count),
       reactedByMe: Number(reaction.reactedByMe) > 0
     }))
+  };
+}
+
+async function getReplyPreview(messageId: string) {
+  const row = await db
+    .select({
+      id: messages.id,
+      body: messages.body,
+      deletedAt: messages.deletedAt,
+      authorName: users.name
+    })
+    .from(messages)
+    .innerJoin(users, eq(users.id, messages.authorId))
+    .where(eq(messages.id, messageId))
+    .limit(1);
+
+  if (!row[0]) return null;
+  return {
+    id: row[0].id,
+    body: row[0].deletedAt ? "Сообщение удалено" : row[0].body,
+    authorName: row[0].authorName
   };
 }
 
