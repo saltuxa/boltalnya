@@ -11,3 +11,4 @@ public/workbox-*.js
 *.db-shm
 *.db-wal
 *.tsbuildinfo
+*.log
