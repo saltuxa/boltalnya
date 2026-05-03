@@ -5,7 +5,7 @@ import { getToken } from "next-auth/jwt";
 import { registerRealtimeHandlers } from "./src/server/socket";
 
 const dev = process.env.NODE_ENV !== "production";
-const hostname = process.env.HOSTNAME ?? "localhost";
+const hostname = process.env.HOST ?? "0.0.0.0";
 const port = Number(process.env.PORT ?? 3000);
 
 const app = next({ dev, hostname, port });
