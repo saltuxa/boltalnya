@@ -1,21 +1,16 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
-import { LogIn, UserPlus } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import * as React from "react";
 
 type Mode = "login" | "register";
 
 export function AuthForm({ initialMode = "login" }: { initialMode?: Mode }) {
-  const router = useRouter();
-  const [mode, setMode] = useState<Mode>(initialMode);
-  const [name, setName] = useState("");
-  const [username, setUsername] = useState("");
-  const [password, setPassword] = useState("");
-  const [error, setError] = useState("");
-  const [loading, setLoading] = useState(false);
+  const [mode, setMode] = React.useState<Mode>(initialMode);
+  const [name, setName] = React.useState("");
+  const [username, setUsername] = React.useState("");
+  const [password, setPassword] = React.useState("");
+  const [error, setError] = React.useState("");
+  const [loading, setLoading] = React.useState(false);
 
   async function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -34,8 +29,7 @@ export function AuthForm({ initialMode = "login" }: { initialMode?: Mode }) {
       }
 
       await signInWithCredentials(username, password);
-      router.push("/app");
-      router.refresh();
+      window.location.href = "/app";
     } catch (submitError) {
       setError(submitError instanceof Error ? submitError.message : "Что-то пошло не так");
     } finally {
@@ -48,12 +42,18 @@ export function AuthForm({ initialMode = "login" }: { initialMode?: Mode }) {
       {mode === "register" && (
         <label className="block space-y-2 text-sm text-neutral-300">
           <span>Имя</span>
-          <Input value={name} onChange={(event) => setName(event.target.value)} placeholder="Как вас называть" />
+          <input
+            className="focus-ring h-10 w-full rounded-md border border-neutral-800 bg-neutral-950 px-3 text-sm text-neutral-100 placeholder:text-neutral-500 transition-colors duration-150 focus:border-blue-500"
+            value={name}
+            onChange={(event) => setName(event.target.value)}
+            placeholder="Как вас называть"
+          />
         </label>
       )}
       <label className="block space-y-2 text-sm text-neutral-300">
         <span>Логин</span>
-        <Input
+        <input
+          className="focus-ring h-10 w-full rounded-md border border-neutral-800 bg-neutral-950 px-3 text-sm text-neutral-100 placeholder:text-neutral-500 transition-colors duration-150 focus:border-blue-500"
           value={username}
           onChange={(event) => setUsername(event.target.value)}
           autoComplete="username"
@@ -62,7 +62,8 @@ export function AuthForm({ initialMode = "login" }: { initialMode?: Mode }) {
       </label>
       <label className="block space-y-2 text-sm text-neutral-300">
         <span>Пароль</span>
-        <Input
+        <input
+          className="focus-ring h-10 w-full rounded-md border border-neutral-800 bg-neutral-950 px-3 text-sm text-neutral-100 placeholder:text-neutral-500 transition-colors duration-150 focus:border-blue-500"
           value={password}
           onChange={(event) => setPassword(event.target.value)}
           autoComplete={mode === "register" ? "new-password" : "current-password"}
@@ -73,10 +74,13 @@ export function AuthForm({ initialMode = "login" }: { initialMode?: Mode }) {
 
       {error && <p className="rounded-md border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-200">{error}</p>}
 
-      <Button className="w-full" disabled={loading} type="submit" variant="primary">
-        {mode === "register" ? <UserPlus size={17} /> : <LogIn size={17} />}
+      <button
+        className="focus-ring inline-flex h-10 w-full items-center justify-center rounded-md border border-blue-500 bg-blue-500 px-4 text-sm font-medium text-white transition-colors duration-150 hover:bg-blue-400 disabled:cursor-not-allowed disabled:opacity-50"
+        disabled={loading}
+        type="submit"
+      >
         {loading ? "Проверяем..." : mode === "register" ? "Зарегистрироваться" : "Войти"}
-      </Button>
+      </button>
 
       <button
         className="focus-ring w-full rounded-md px-3 py-2 text-sm text-neutral-400 transition-colors hover:text-neutral-100"

@@ -26,7 +26,7 @@ export default defineConfig({
     }
   ],
   webServer: {
-    command: "yarn dev",
+    command: "yarn dev:next",
     url: baseURL,
     reuseExistingServer: false,
     timeout: 120_000,

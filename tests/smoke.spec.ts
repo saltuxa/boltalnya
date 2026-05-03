@@ -32,6 +32,7 @@ test("opens Boltalnya and completes direct chat, group invite, and messaging flo
 
   await expect(page).toHaveURL(/\/app$/, { timeout: 15_000 });
   await expect(page.getByText(`@${primaryUsername}`)).toBeVisible();
+  await expect(page.locator('main[data-ready="true"]')).toBeVisible();
 
   const chatsResponse = await request.get("/api/chats", {
     headers: {
@@ -40,9 +41,10 @@ test("opens Boltalnya and completes direct chat, group invite, and messaging flo
   });
   expect(chatsResponse.status()).toBe(200);
 
-  await page.getByPlaceholder("Найти пользователя").fill(secondaryUsername);
-  await expect(page.getByText(`@${secondaryUsername}`)).toBeVisible();
-  await page.getByRole("button", { name: "Написать" }).click();
+  const sidebar = page.locator("aside").first();
+  await sidebar.getByPlaceholder("Найти пользователя").pressSequentially(secondaryUsername);
+  await expect(sidebar.getByText(`@${secondaryUsername}`)).toBeVisible();
+  await sidebar.getByRole("button", { name: "Написать" }).click();
   await expect(page.getByRole("button", { name: new RegExp(secondaryName) })).toBeVisible();
 
   await page.getByPlaceholder("Написать сообщение").fill(directMessage);
@@ -54,7 +56,7 @@ test("opens Boltalnya and completes direct chat, group invite, and messaging flo
   await expect(page.getByRole("button", { name: new RegExp(groupTitle) })).toBeVisible();
 
   const rightPanel = page.locator("aside").last();
-  await rightPanel.getByPlaceholder("Найти пользователя").fill(secondaryUsername);
+  await rightPanel.getByPlaceholder("Найти пользователя").pressSequentially(secondaryUsername);
   await expect(rightPanel.getByText(`@${secondaryUsername}`)).toBeVisible();
   await rightPanel.getByTitle("Добавить участника").click();
   await expect(rightPanel.getByText(secondaryName)).toBeVisible();

@@ -52,6 +52,7 @@ export function MessengerShell({ currentUser, initialChats }: { currentUser: Use
   const [typingNames, setTypingNames] = useState<string[]>([]);
   const [loadingMessages, setLoadingMessages] = useState(false);
   const [newChatTitle, setNewChatTitle] = useState("");
+  const [hydrated, setHydrated] = useState(false);
 
   const activeChat = chats.find((chat) => chat.id === activeChatId) ?? null;
   const groupedTyping = useMemo(() => typingNames.slice(0, 2).join(", "), [typingNames]);
@@ -67,6 +68,14 @@ export function MessengerShell({ currentUser, initialChats }: { currentUser: Use
     const data = await response.json();
     setMembers(data.members ?? []);
   }, []);
+
+  useEffect(() => {
+    searchUsers(userQuery, "sidebar");
+  }, [userQuery]);
+
+  useEffect(() => {
+    searchUsers(memberQuery, "members");
+  }, [memberQuery]);
 
   async function searchUsers(query: string, target: "sidebar" | "members") {
     if (query.trim().length < 2) {
@@ -89,6 +98,7 @@ export function MessengerShell({ currentUser, initialChats }: { currentUser: Use
   }
 
   useEffect(() => {
+    setHydrated(true);
     const nextSocket: TypedSocket = io({ path: "/api/socket" });
     setSocket(nextSocket);
 
@@ -226,7 +236,10 @@ export function MessengerShell({ currentUser, initialChats }: { currentUser: Use
   }
 
   return (
-    <main className="grid h-screen grid-cols-[320px_minmax(0,1fr)_300px] bg-[#0F0F0F] text-neutral-100 max-xl:grid-cols-[300px_minmax(0,1fr)] max-md:grid-cols-1">
+    <main
+      className="grid h-screen grid-cols-[320px_minmax(0,1fr)_300px] bg-[#0F0F0F] text-neutral-100 max-xl:grid-cols-[300px_minmax(0,1fr)] max-md:grid-cols-1"
+      data-ready={hydrated ? "true" : "false"}
+    >
       <aside className={cn("flex min-h-0 flex-col border-r border-neutral-800 bg-[#111111]", activeChatId && "max-md:hidden")}>
         <div className="border-b border-neutral-800 p-4">
           <div className="flex items-center justify-between">
@@ -273,10 +286,7 @@ export function MessengerShell({ currentUser, initialChats }: { currentUser: Use
           <div className="mt-2">
             <Input
               value={userQuery}
-              onChange={(event) => {
-                setUserQuery(event.target.value);
-                searchUsers(event.target.value, "sidebar");
-              }}
+              onChange={(event) => setUserQuery(event.target.value)}
               placeholder="Найти пользователя"
             />
             {userResults.length > 0 && (
@@ -485,10 +495,7 @@ export function MessengerShell({ currentUser, initialChats }: { currentUser: Use
                 <label className="mb-2 block text-xs font-medium text-neutral-500">Добавить участника</label>
                 <Input
                   value={memberQuery}
-                  onChange={(event) => {
-                    setMemberQuery(event.target.value);
-                    searchUsers(event.target.value, "members");
-                  }}
+                  onChange={(event) => setMemberQuery(event.target.value)}
                   placeholder="Найти пользователя"
                 />
                 {memberResults.length > 0 && (
