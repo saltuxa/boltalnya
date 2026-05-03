@@ -5,7 +5,7 @@ import { getToken } from "next-auth/jwt";
 import { registerRealtimeHandlers } from "./src/server/socket";
 
 const dev = process.env.NODE_ENV !== "production";
-const hostname = process.env.HOSTNAME ?? "0.0.0.0";
+const hostname = process.env.HOSTNAME ?? "localhost";
 const port = Number(process.env.PORT ?? 3000);
 
 const app = next({ dev, hostname, port });
@@ -40,6 +40,6 @@ app.prepare().then(() => {
   registerRealtimeHandlers(io);
 
   httpServer.listen(port, hostname, () => {
-    console.log(`Болтальня запущена: http://${hostname}:${port}`);
+    console.log(`Boltalnya running: http://${hostname}:${port}`);
   });
 });
