@@ -1,0 +1,12 @@
+.next
+node_modules
+dist
+coverage
+.env
+.env.local
+storage
+public/sw.js
+public/workbox-*.js
+*.db
+*.db-shm
+*.db-wal
