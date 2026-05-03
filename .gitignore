@@ -10,3 +10,4 @@ public/workbox-*.js
 *.db
 *.db-shm
 *.db-wal
+*.tsbuildinfo
