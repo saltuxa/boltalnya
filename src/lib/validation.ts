@@ -2,8 +2,20 @@ import { z } from "zod";
 
 export const chatCreateSchema = z.object({
   title: z.string().trim().min(2).max(80),
-  type: z.enum(["direct", "group", "channel"]).default("group"),
+  type: z.enum(["group", "channel"]).default("group"),
   memberIds: z.array(z.string()).default([])
+});
+
+export const directChatSchema = z.object({
+  userId: z.string().min(1)
+});
+
+export const chatMembersAddSchema = z.object({
+  userIds: z.array(z.string().min(1)).min(1).max(20)
+});
+
+export const userSearchSchema = z.object({
+  q: z.string().trim().min(2).max(80)
 });
 
 export const messageCreateSchema = z.object({

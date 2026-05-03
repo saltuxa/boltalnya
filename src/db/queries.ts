@@ -1,8 +1,8 @@
-import { and, desc, eq, isNull, like, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, like, ne, or, sql } from "drizzle-orm";
 import { db } from "@/db/client";
 import { ensureDatabase } from "@/db/init";
 import { chatMembers, chats, messageReactions, messages, users } from "@/db/schema";
-import type { ChatPreview } from "@/features/chats/types";
+import type { ChatMemberDto, ChatPreview, UserSearchResult } from "@/features/chats/types";
 import type { MessageDto } from "@/features/messages/types";
 import { createId } from "@/lib/ids";
 
@@ -13,6 +13,24 @@ export async function isChatMember(chatId: string, userId: string) {
     where: and(eq(chatMembers.chatId, chatId), eq(chatMembers.userId, userId))
   });
   return Boolean(member);
+}
+
+export async function searchUsers(viewerId: string, query: string): Promise<UserSearchResult[]> {
+  const q = query.trim();
+  if (q.length < 2) return [];
+
+  return db
+    .select({
+      id: users.id,
+      name: users.name,
+      username: users.username,
+      avatar: users.avatar,
+      status: users.status
+    })
+    .from(users)
+    .where(and(ne(users.id, viewerId), or(like(users.username, `%${q}%`), like(users.name, `%${q}%`))))
+    .orderBy(users.username)
+    .limit(20);
 }
 
 export async function listChats(userId: string, query = ""): Promise<ChatPreview[]> {
@@ -33,8 +51,9 @@ export async function listChats(userId: string, query = ""): Promise<ChatPreview
     )
     .orderBy(desc(chats.updatedAt));
 
-  const previews = await Promise.all(
+  return Promise.all(
     rows.map(async (chat) => {
+      const directPeer = chat.type === "direct" ? await getDirectPeer(chat.id, userId) : null;
       const lastMessage = await db
         .select({
           body: messages.body,
@@ -55,8 +74,9 @@ export async function listChats(userId: string, query = ""): Promise<ChatPreview
       return {
         id: chat.id,
         type: chat.type,
-        title: chat.title ?? "Без названия",
-        avatar: chat.avatar,
+        title: directPeer?.name ?? chat.title ?? "Без названия",
+        avatar: directPeer?.avatar ?? chat.avatar,
+        subtitle: directPeer ? `@${directPeer.username} · ${directPeer.status}` : undefined,
         updatedAt: serializeDate(chat.updatedAt),
         membersCount: membersCount[0]?.count ?? 0,
         lastMessage: lastMessage[0]
@@ -69,13 +89,28 @@ export async function listChats(userId: string, query = ""): Promise<ChatPreview
       };
     })
   );
+}
 
-  return previews;
+async function getDirectPeer(chatId: string, viewerId: string) {
+  const rows = await db
+    .select({
+      id: users.id,
+      name: users.name,
+      username: users.username,
+      avatar: users.avatar,
+      status: users.status
+    })
+    .from(chatMembers)
+    .innerJoin(users, eq(users.id, chatMembers.userId))
+    .where(and(eq(chatMembers.chatId, chatId), ne(chatMembers.userId, viewerId)))
+    .limit(1);
+
+  return rows[0] ?? null;
 }
 
 export async function createChat(input: {
   title: string;
-  type: "direct" | "group" | "channel";
+  type: "group" | "channel";
   ownerId: string;
   memberIds: string[];
 }) {
@@ -97,6 +132,107 @@ export async function createChat(input: {
   );
 
   return id;
+}
+
+export async function findOrCreateDirectChat(viewerId: string, peerId: string) {
+  if (viewerId === peerId) {
+    throw new Error("Нельзя создать личный чат с самим собой");
+  }
+
+  const peer = await db.query.users.findFirst({ where: eq(users.id, peerId) });
+  if (!peer) throw new Error("Пользователь не найден");
+
+  const sortedTarget = [viewerId, peerId].sort();
+  const candidates = await db
+    .select({ chatId: chatMembers.chatId })
+    .from(chatMembers)
+    .innerJoin(chats, eq(chats.id, chatMembers.chatId))
+    .where(and(eq(chats.type, "direct"), eq(chatMembers.userId, viewerId)));
+
+  for (const candidate of candidates) {
+    const members = await db
+      .select({ userId: chatMembers.userId })
+      .from(chatMembers)
+      .where(eq(chatMembers.chatId, candidate.chatId));
+    const ids = members.map((member) => member.userId).sort();
+    if (ids.length === 2 && ids[0] === sortedTarget[0] && ids[1] === sortedTarget[1]) {
+      return candidate.chatId;
+    }
+  }
+
+  const id = createId("cht");
+  await db.insert(chats).values({
+    id,
+    type: "direct",
+    title: null,
+    ownerId: viewerId
+  });
+  await db.insert(chatMembers).values([
+    { chatId: id, userId: viewerId, role: "owner" },
+    { chatId: id, userId: peerId, role: "member" }
+  ]);
+  return id;
+}
+
+export async function listChatMembers(chatId: string, viewerId: string): Promise<ChatMemberDto[]> {
+  if (!(await isChatMember(chatId, viewerId))) return [];
+
+  const rows = await db
+    .select({
+      id: users.id,
+      name: users.name,
+      username: users.username,
+      avatar: users.avatar,
+      status: users.status,
+      role: chatMembers.role,
+      joinedAt: chatMembers.joinedAt
+    })
+    .from(chatMembers)
+    .innerJoin(users, eq(users.id, chatMembers.userId))
+    .where(eq(chatMembers.chatId, chatId))
+    .orderBy(chatMembers.joinedAt);
+
+  return rows.map((row) => ({
+    ...row,
+    joinedAt: serializeDate(row.joinedAt)
+  }));
+}
+
+export async function addChatMembers(chatId: string, actorId: string, userIds: string[]) {
+  const chat = await db.query.chats.findFirst({ where: eq(chats.id, chatId) });
+  if (!chat) throw new Error("Чат не найден");
+  if (chat.type !== "group") throw new Error("Участников можно добавлять только в групповой чат");
+
+  const actor = await db.query.chatMembers.findFirst({
+    where: and(eq(chatMembers.chatId, chatId), eq(chatMembers.userId, actorId))
+  });
+  if (!actor || !["owner", "admin"].includes(actor.role)) throw new Error("Недостаточно прав");
+
+  const uniqueIds = Array.from(new Set(userIds)).filter((id) => id !== actorId);
+  if (uniqueIds.length === 0) return listChatMembers(chatId, actorId);
+
+  const existing = await db
+    .select({ userId: chatMembers.userId })
+    .from(chatMembers)
+    .where(and(eq(chatMembers.chatId, chatId), inArray(chatMembers.userId, uniqueIds)));
+  const existingIds = new Set(existing.map((member) => member.userId));
+  const missingIds = uniqueIds.filter((id) => !existingIds.has(id));
+
+  if (missingIds.length > 0) {
+    const validUsers = await db.select({ id: users.id }).from(users).where(inArray(users.id, missingIds));
+    if (validUsers.length > 0) {
+      await db.insert(chatMembers).values(
+        validUsers.map((user) => ({
+          chatId,
+          userId: user.id,
+          role: "member" as const
+        }))
+      );
+      await db.update(chats).set({ updatedAt: new Date() }).where(eq(chats.id, chatId));
+    }
+  }
+
+  return listChatMembers(chatId, actorId);
 }
 
 export async function listMessages(chatId: string, viewerId: string, search = ""): Promise<MessageDto[]> {
@@ -232,9 +368,9 @@ async function hydrateMessage(
     chatId: string;
     body: string;
     replyToId: string | null;
-    createdAt: Date;
-    editedAt: Date | null;
-    deletedAt: Date | null;
+    createdAt: Date | string | number;
+    editedAt: Date | string | number | null;
+    deletedAt: Date | string | number | null;
     authorId: string;
     authorName: string;
     authorUsername: string;
@@ -275,9 +411,7 @@ async function hydrateMessage(
 }
 
 function serializeDate(value: Date | string | number) {
-  if (value instanceof Date && !Number.isNaN(value.getTime())) {
-    return value.toISOString();
-  }
+  if (value instanceof Date && !Number.isNaN(value.getTime())) return value.toISOString();
 
   if (typeof value === "number") {
     const date = new Date(value);
