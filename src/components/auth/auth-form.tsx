@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { LogIn, UserPlus } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -34,13 +33,7 @@ export function AuthForm({ initialMode = "login" }: { initialMode?: Mode }) {
         if (!response.ok) throw new Error(data.error ?? "Не удалось зарегистрироваться");
       }
 
-      const result = await signIn("credentials", {
-        username,
-        password,
-        redirect: false
-      });
-
-      if (result?.error) throw new Error("Неверный логин или пароль");
+      await signInWithCredentials(username, password);
       router.push("/app");
       router.refresh();
     } catch (submitError) {
@@ -97,4 +90,26 @@ export function AuthForm({ initialMode = "login" }: { initialMode?: Mode }) {
       </button>
     </form>
   );
+}
+
+async function signInWithCredentials(username: string, password: string) {
+  const csrfResponse = await fetch("/api/auth/csrf");
+  const csrf = await csrfResponse.json();
+  const body = new URLSearchParams({
+    username,
+    password,
+    csrfToken: csrf.csrfToken,
+    json: "true"
+  });
+
+  const response = await fetch("/api/auth/callback/credentials", {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body
+  });
+  const data = await response.json().catch(() => ({}));
+
+  if (!response.ok || data.error) {
+    throw new Error("Неверный логин или пароль");
+  }
 }

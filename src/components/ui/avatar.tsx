@@ -1,4 +1,3 @@
-import Image from "next/image";
 import { cn, initials } from "@/lib/utils";
 
 type AvatarProps = {
@@ -16,7 +15,8 @@ export function Avatar({ src, name, className }: AvatarProps) {
       )}
     >
       {src ? (
-        <Image src={src} alt={name ?? "Аватар"} fill sizes="48px" className="object-cover" />
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={src} alt={name ?? "Аватар"} className="h-full w-full object-cover" />
       ) : (
         initials(name)
       )}

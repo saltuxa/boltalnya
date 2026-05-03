@@ -1,11 +1,10 @@
-import fs from "node:fs/promises";
-import path from "node:path";
 import { eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { db } from "@/db/client";
 import { users } from "@/db/schema";
-import { createId } from "@/lib/ids";
 import { requireUser } from "@/lib/session";
+
+const MAX_AVATAR_BYTES = 512 * 1024;
 
 export async function POST(request: Request) {
   const user = await requireUser();
@@ -16,14 +15,14 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Нужен файл изображения" }, { status: 400 });
   }
 
-  const extension = file.type.split("/")[1] ?? "png";
-  const fileName = `${createId("ava")}.${extension}`;
-  const uploadDir = path.join(process.cwd(), "storage", "uploads", "avatars");
-  await fs.mkdir(uploadDir, { recursive: true });
-  await fs.writeFile(path.join(uploadDir, fileName), Buffer.from(await file.arrayBuffer()));
+  if (file.size > MAX_AVATAR_BYTES) {
+    return NextResponse.json({ error: "Аватар должен быть не больше 512 KB" }, { status: 400 });
+  }
 
-  const url = `/api/uploads/avatar/${fileName}`;
-  await db.update(users).set({ avatar: url, updatedAt: new Date() }).where(eq(users.id, user.id));
+  const buffer = Buffer.from(await file.arrayBuffer());
+  const dataUrl = `data:${file.type};base64,${buffer.toString("base64")}`;
 
-  return NextResponse.json({ url });
+  await db.update(users).set({ avatar: dataUrl, updatedAt: new Date() }).where(eq(users.id, user.id));
+
+  return NextResponse.json({ url: dataUrl });
 }

@@ -44,14 +44,10 @@ export async function listChats(userId: string, query = ""): Promise<ChatPreview
     })
     .from(chats)
     .innerJoin(chatMembers, eq(chatMembers.chatId, chats.id))
-    .where(
-      query
-        ? and(eq(chatMembers.userId, userId), like(chats.title, `%${query}%`))
-        : eq(chatMembers.userId, userId)
-    )
+    .where(eq(chatMembers.userId, userId))
     .orderBy(desc(chats.updatedAt));
 
-  return Promise.all(
+  const previews = await Promise.all(
     rows.map(async (chat) => {
       const directPeer = chat.type === "direct" ? await getDirectPeer(chat.id, userId) : null;
       const lastMessage = await db
@@ -89,6 +85,11 @@ export async function listChats(userId: string, query = ""): Promise<ChatPreview
       };
     })
   );
+
+  const q = query.trim().toLowerCase();
+  return q
+    ? previews.filter((chat) => `${chat.title} ${chat.subtitle ?? ""}`.toLowerCase().includes(q))
+    : previews;
 }
 
 async function getDirectPeer(chatId: string, viewerId: string) {

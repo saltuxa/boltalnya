@@ -2,13 +2,25 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { signOut } from "next-auth/react";
-import { Bell, Edit3, LogOut, MessageSquarePlus, MoreHorizontal, Reply, Search, Send, Settings, Smile, Trash2 } from "lucide-react";
+import {
+  Bell,
+  Edit3,
+  LogOut,
+  MessageSquarePlus,
+  MoreHorizontal,
+  Reply,
+  Search,
+  Send,
+  Settings,
+  Smile,
+  Trash2,
+  UserPlus
+} from "lucide-react";
 import { io, type Socket } from "socket.io-client";
 import { Avatar } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Input, Textarea } from "@/components/ui/input";
-import type { ChatPreview } from "@/features/chats/types";
+import type { ChatMemberDto, ChatPreview, UserSearchResult } from "@/features/chats/types";
 import type { MessageDto } from "@/features/messages/types";
 import type { ClientToServerEvents, ServerToClientEvents } from "@/features/realtime/types";
 import { cn, shortTime } from "@/lib/utils";
@@ -27,7 +39,12 @@ export function MessengerShell({ currentUser, initialChats }: { currentUser: Use
   const [chats, setChats] = useState(initialChats);
   const [activeChatId, setActiveChatId] = useState(initialChats[0]?.id ?? "");
   const [messages, setMessages] = useState<MessageDto[]>([]);
+  const [members, setMembers] = useState<ChatMemberDto[]>([]);
   const [chatQuery, setChatQuery] = useState("");
+  const [userQuery, setUserQuery] = useState("");
+  const [memberQuery, setMemberQuery] = useState("");
+  const [userResults, setUserResults] = useState<UserSearchResult[]>([]);
+  const [memberResults, setMemberResults] = useState<UserSearchResult[]>([]);
   const [messageQuery, setMessageQuery] = useState("");
   const [draft, setDraft] = useState("");
   const [replyTo, setReplyTo] = useState<MessageDto | null>(null);
@@ -37,12 +54,39 @@ export function MessengerShell({ currentUser, initialChats }: { currentUser: Use
   const [newChatTitle, setNewChatTitle] = useState("");
 
   const activeChat = chats.find((chat) => chat.id === activeChatId) ?? null;
+  const groupedTyping = useMemo(() => typingNames.slice(0, 2).join(", "), [typingNames]);
 
   const refreshChats = useCallback(async (query = "") => {
     const response = await fetch(`/api/chats${query ? `?q=${encodeURIComponent(query)}` : ""}`);
     const data = await response.json();
     setChats(data.chats ?? []);
   }, []);
+
+  const refreshMembers = useCallback(async (chatId: string) => {
+    const response = await fetch(`/api/chats/${chatId}/members`);
+    const data = await response.json();
+    setMembers(data.members ?? []);
+  }, []);
+
+  async function searchUsers(query: string, target: "sidebar" | "members") {
+    if (query.trim().length < 2) {
+      if (target === "sidebar") {
+        setUserResults([]);
+      } else {
+        setMemberResults([]);
+      }
+      return;
+    }
+
+    const response = await fetch(`/api/users?q=${encodeURIComponent(query)}`);
+    const data = await response.json();
+    const results = (data.users ?? []) as UserSearchResult[];
+    if (target === "sidebar") {
+      setUserResults(results);
+    } else {
+      setMemberResults(results);
+    }
+  }
 
   useEffect(() => {
     const nextSocket: TypedSocket = io({ path: "/api/socket" });
@@ -90,13 +134,12 @@ export function MessengerShell({ currentUser, initialChats }: { currentUser: Use
       .then((response) => response.json())
       .then((data) => setMessages(data.messages ?? []))
       .finally(() => setLoadingMessages(false));
+    refreshMembers(activeChatId);
 
     return () => {
       socket?.emit("chat:leave", { chatId: activeChatId });
     };
-  }, [activeChatId, messageQuery, socket]);
-
-  const groupedTyping = useMemo(() => typingNames.slice(0, 2).join(", "), [typingNames]);
+  }, [activeChatId, messageQuery, refreshMembers, socket]);
 
   async function createChat() {
     if (!newChatTitle.trim()) return;
@@ -109,6 +152,35 @@ export function MessengerShell({ currentUser, initialChats }: { currentUser: Use
     setNewChatTitle("");
     setChats(data.chats ?? []);
     setActiveChatId(data.id);
+  }
+
+  async function openDirectChat(peerId: string) {
+    const response = await fetch("/api/chats/direct", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ userId: peerId })
+    });
+    const data = await response.json();
+    if (!response.ok) return;
+    setChats(data.chats ?? []);
+    setActiveChatId(data.id);
+    setUserQuery("");
+    setUserResults([]);
+  }
+
+  async function addMember(userId: string) {
+    if (!activeChatId) return;
+    const response = await fetch(`/api/chats/${activeChatId}/members`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ userIds: [userId] })
+    });
+    const data = await response.json();
+    if (!response.ok) return;
+    setMembers(data.members ?? []);
+    setMemberQuery("");
+    setMemberResults([]);
+    refreshChats(chatQuery);
   }
 
   async function submitMessage() {
@@ -171,11 +243,12 @@ export function MessengerShell({ currentUser, initialChats }: { currentUser: Use
                   <Settings size={17} />
                 </Link>
               </Button>
-              <Button size="icon" variant="ghost" title="Выйти" onClick={() => signOut({ callbackUrl: "/" })}>
+              <Button size="icon" variant="ghost" title="Выйти" onClick={() => void signOutToHome()}>
                 <LogOut size={17} />
               </Button>
             </div>
           </div>
+
           <div className="mt-4 flex gap-2">
             <Input
               value={chatQuery}
@@ -189,11 +262,39 @@ export function MessengerShell({ currentUser, initialChats }: { currentUser: Use
               <Search size={17} />
             </Button>
           </div>
+
           <div className="mt-2 flex gap-2">
             <Input value={newChatTitle} onChange={(event) => setNewChatTitle(event.target.value)} placeholder="Новая группа" />
             <Button size="icon" variant="primary" onClick={createChat} title="Создать чат">
               <MessageSquarePlus size={17} />
             </Button>
+          </div>
+
+          <div className="mt-2">
+            <Input
+              value={userQuery}
+              onChange={(event) => {
+                setUserQuery(event.target.value);
+                searchUsers(event.target.value, "sidebar");
+              }}
+              placeholder="Найти пользователя"
+            />
+            {userResults.length > 0 && (
+              <div className="mt-2 max-h-44 overflow-y-auto rounded-md border border-neutral-800 bg-neutral-950 p-1">
+                {userResults.map((user) => (
+                  <div key={user.id} className="flex items-center gap-2 rounded-md px-2 py-2 hover:bg-neutral-900">
+                    <Avatar src={user.avatar} name={user.name} className="h-7 w-7" />
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate text-sm">{user.name}</div>
+                      <div className="truncate text-xs text-neutral-500">@{user.username}</div>
+                    </div>
+                    <Button size="sm" variant="secondary" onClick={() => openDirectChat(user.id)}>
+                      Написать
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
 
@@ -215,7 +316,9 @@ export function MessengerShell({ currentUser, initialChats }: { currentUser: Use
                 <span className="text-xs text-neutral-500">{shortTime(chat.updatedAt)}</span>
               </div>
               <p className="mt-1 truncate text-xs text-neutral-500">
-                {chat.lastMessage ? `${chat.lastMessage.authorName}: ${chat.lastMessage.body}` : `${chat.membersCount} участников`}
+                {chat.lastMessage
+                  ? `${chat.lastMessage.authorName}: ${chat.lastMessage.body}`
+                  : chat.subtitle ?? `${chat.membersCount} участников`}
               </p>
             </button>
           ))}
@@ -229,7 +332,7 @@ export function MessengerShell({ currentUser, initialChats }: { currentUser: Use
               <div>
                 <h1 className="text-base font-semibold">{activeChat.title}</h1>
                 <p className="text-xs text-neutral-500">
-                  {groupedTyping ? `${groupedTyping} печатает...` : `${activeChat.membersCount} участников`}
+                  {groupedTyping ? `${groupedTyping} печатает...` : activeChat.subtitle ?? `${activeChat.membersCount} участников`}
                 </p>
               </div>
               <div className="flex items-center gap-2">
@@ -361,11 +464,72 @@ export function MessengerShell({ currentUser, initialChats }: { currentUser: Use
       </section>
 
       <aside className="border-l border-neutral-800 bg-[#111111] p-4 max-xl:hidden">
-        <h2 className="text-sm font-semibold">Информация</h2>
-        <p className="mt-2 text-sm leading-6 text-neutral-500">
-          {activeChat ? "Групповой чат, реакции, ответы, редактирование и удаление сообщений уже доступны." : "Чат не выбран."}
-        </p>
+        <h2 className="text-sm font-semibold">{activeChat?.type === "direct" ? "Профиль" : "Участники"}</h2>
+        {activeChat ? (
+          <>
+            <div className="mt-4 space-y-2">
+              {members.map((member) => (
+                <div key={member.id} className="flex items-center gap-3 rounded-md border border-neutral-800 bg-neutral-950 px-3 py-2">
+                  <Avatar src={member.avatar} name={member.name} className="h-8 w-8" />
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate text-sm">{member.name}</div>
+                    <div className="truncate text-xs text-neutral-500">@{member.username}</div>
+                  </div>
+                  <span className="text-xs text-neutral-500">{member.role}</span>
+                </div>
+              ))}
+            </div>
+
+            {activeChat.type === "group" && (
+              <div className="mt-5">
+                <label className="mb-2 block text-xs font-medium text-neutral-500">Добавить участника</label>
+                <Input
+                  value={memberQuery}
+                  onChange={(event) => {
+                    setMemberQuery(event.target.value);
+                    searchUsers(event.target.value, "members");
+                  }}
+                  placeholder="Найти пользователя"
+                />
+                {memberResults.length > 0 && (
+                  <div className="mt-2 max-h-52 overflow-y-auto rounded-md border border-neutral-800 bg-neutral-950 p-1">
+                    {memberResults
+                      .filter((user) => !members.some((member) => member.id === user.id))
+                      .map((user) => (
+                        <div key={user.id} className="flex items-center gap-2 rounded-md px-2 py-2 hover:bg-neutral-900">
+                          <Avatar src={user.avatar} name={user.name} className="h-7 w-7" />
+                          <div className="min-w-0 flex-1">
+                            <div className="truncate text-sm">{user.name}</div>
+                            <div className="truncate text-xs text-neutral-500">@{user.username}</div>
+                          </div>
+                          <Button size="icon" variant="secondary" onClick={() => addMember(user.id)} title="Добавить участника">
+                            <UserPlus size={15} />
+                          </Button>
+                        </div>
+                      ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </>
+        ) : (
+          <p className="mt-2 text-sm leading-6 text-neutral-500">Чат не выбран.</p>
+        )}
       </aside>
     </main>
   );
+}
+
+async function signOutToHome() {
+  const csrfResponse = await fetch("/api/auth/csrf");
+  const csrf = await csrfResponse.json();
+  await fetch("/api/auth/signout", {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
+      csrfToken: csrf.csrfToken,
+      json: "true"
+    })
+  });
+  window.location.href = "/";
 }

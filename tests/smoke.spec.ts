@@ -1,12 +1,19 @@
 import { expect, test } from "@playwright/test";
 
-test("opens Boltalnya and completes the core chat flow", async ({ page, request }) => {
+test("opens Boltalnya and completes direct chat, group invite, and messaging flow", async ({ page, request }) => {
   const stamp = Date.now();
-  const name = "Smoke User";
-  const username = `smoke_${stamp}`;
+  const primaryName = "Smoke User";
+  const primaryUsername = `smoke_${stamp}`;
+  const secondaryName = "Direct Friend";
+  const secondaryUsername = `friend_${stamp}`;
   const password = "1234";
-  const chatTitle = `Smoke chat ${stamp}`;
-  const messageText = `Smoke message ${stamp}`;
+  const directMessage = `Direct smoke message ${stamp}`;
+  const groupTitle = `Smoke group ${stamp}`;
+  const groupMessage = `Group smoke message ${stamp}`;
+
+  await request.post("/api/register", {
+    data: { name: secondaryName, username: secondaryUsername, password }
+  });
 
   await page.goto("/");
   await expect(page).toHaveTitle(/Болтальня/);
@@ -18,13 +25,13 @@ test("opens Boltalnya and completes the core chat flow", async ({ page, request 
   await expect(page.getByRole("heading", { name: "Вход в Болтальню" })).toBeVisible();
 
   await page.getByRole("button", { name: /Зарегистрироваться/ }).click();
-  await page.getByLabel("Имя").fill(name);
-  await page.getByLabel("Логин").fill(username);
+  await page.getByLabel("Имя").fill(primaryName);
+  await page.getByLabel("Логин").fill(primaryUsername);
   await page.getByLabel("Пароль").fill(password);
   await page.getByRole("button", { name: "Зарегистрироваться" }).click();
 
   await expect(page).toHaveURL(/\/app$/, { timeout: 15_000 });
-  await expect(page.getByText(`@${username}`)).toBeVisible();
+  await expect(page.getByText(`@${primaryUsername}`)).toBeVisible();
 
   const chatsResponse = await request.get("/api/chats", {
     headers: {
@@ -33,13 +40,28 @@ test("opens Boltalnya and completes the core chat flow", async ({ page, request 
   });
   expect(chatsResponse.status()).toBe(200);
 
-  await page.getByPlaceholder("Новая группа").fill(chatTitle);
-  await page.getByTitle("Создать чат").click();
-  await expect(page.getByRole("button", { name: new RegExp(chatTitle) })).toBeVisible();
+  await page.getByPlaceholder("Найти пользователя").fill(secondaryUsername);
+  await expect(page.getByText(`@${secondaryUsername}`)).toBeVisible();
+  await page.getByRole("button", { name: "Написать" }).click();
+  await expect(page.getByRole("button", { name: new RegExp(secondaryName) })).toBeVisible();
 
-  await page.getByPlaceholder("Написать сообщение").fill(messageText);
+  await page.getByPlaceholder("Написать сообщение").fill(directMessage);
   await page.keyboard.press("Enter");
-  await expect(page.getByText(messageText, { exact: true })).toBeVisible();
+  await expect(page.getByText(directMessage, { exact: true })).toBeVisible();
+
+  await page.getByPlaceholder("Новая группа").fill(groupTitle);
+  await page.getByTitle("Создать чат").click();
+  await expect(page.getByRole("button", { name: new RegExp(groupTitle) })).toBeVisible();
+
+  const rightPanel = page.locator("aside").last();
+  await rightPanel.getByPlaceholder("Найти пользователя").fill(secondaryUsername);
+  await expect(rightPanel.getByText(`@${secondaryUsername}`)).toBeVisible();
+  await rightPanel.getByTitle("Добавить участника").click();
+  await expect(rightPanel.getByText(secondaryName)).toBeVisible();
+
+  await page.getByPlaceholder("Написать сообщение").fill(groupMessage);
+  await page.keyboard.press("Enter");
+  await expect(page.getByText(groupMessage, { exact: true })).toBeVisible();
 });
 
 async function cookiesForRequest(page: import("@playwright/test").Page) {
